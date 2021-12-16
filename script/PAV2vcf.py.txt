@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+"""
+"""
+
+import os
+import sys
+
+if __name__ == "__main__":
+    if len(sys.argv) != 4:
+        sys.stdout.write("Usage:Programe in.wh in.pff out.vcf\n")
+        sys.exit(1)
+
+    in_wh, in_pff, out_vcf = sys.argv[1:4]
+
+    ###
+    handle = open(out_vcf, "w")
+
+    ### get canonic chrom
+    canonic_chrom = list(range(1, 10))
+    canonic_chrom = ["0%s"%canonic_chrom[i] for i in range(len(canonic_chrom))] + list(map(str, range(10, 13)))
+
+    ### get gene POS
+    pos = {}
+    with open(in_pff, "r") as f:
+        for line_data in f:
+            line = line_data.strip("\n").split("\t")
+            #print line
+            if line[2] != "gene":
+                continue
+
+            gene_id = line[8].split("=")[1]
+            gene_id=gene_id.split(";")[0]
+            #print gene_id
+            vcf_id = "irgsp1_rep_%s_CDS"%gene_id
+            vcf_pos = line[3]
+
+            if line[0] in canonic_chrom:
+                vcf_chrom = "chr" + line[0].strip("0")
+            else:
+                vcf_chrom = line[0]
+
+            pos[gene_id] = [vcf_chrom, vcf_pos, vcf_id]
+
+
+    ### make vcf
+    other_info = ["G", "A", ".", ".", "PR", "GT"]
+    with open(in_wh, "r") as f:
+        for line_data in f:
+            line = line_data.strip("\n").split("\t")
+            if line[0] == "ID":
+                sampleNames = line[1:]
+                vcf_header = ["##CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT"] + sampleNames
+                handle.write("\t".join(vcf_header) + "\n")
+                continue
+
+            geneID, mutations = line[0], line[1:]
+            if mutations.count("0") >= 1:
+                vcf_mutation = [mutations[i].replace("0", "0/0").replace("1", "1/1") for i in range(len(mutations))]
+                vcf_chrom, vcf_pos, vcf_id = pos[geneID]
+
+                info = [vcf_chrom, vcf_pos, vcf_id] + other_info + vcf_mutation
+                handle.write("\t".join(info) + "\n")
+
+    handle.close()
